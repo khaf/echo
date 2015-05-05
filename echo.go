@@ -362,6 +362,8 @@ func (e *Echo) run(s *http.Server, f ...string) {
 		log.Fatal(s.ListenAndServe())
 	} else if len(f) == 2 {
 		log.Fatal(s.ListenAndServeTLS(f[0], f[1]))
+	} else {
+		log.Fatal("echo: invalid TLS configuration")
 	}
 }
 
