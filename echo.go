@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bradfitz/http2"
 	"github.com/labstack/gommon/color"
 	"github.com/mattn/go-colorable"
 )
@@ -22,6 +23,7 @@ type (
 		Router           *router
 		prefix           string
 		middleware       []MiddlewareFunc
+		http2            bool
 		maxParam         byte
 		notFoundHandler  HandlerFunc
 		httpErrorHandler HTTPErrorHandler
@@ -154,6 +156,10 @@ func (e *Echo) Group(pfx string, m ...Middleware) *Echo {
 		g.Use(m...)
 	}
 	return &g
+}
+
+func (e *Echo) HTTP2(h2 bool) {
+	e.http2 = h2
 }
 
 // MaxParam sets the maximum number of path parameters allowd for the application.
@@ -317,24 +323,36 @@ func (e *Echo) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Run runs a server.
 func (e *Echo) Run(addr string) {
-	log.Fatal(http.ListenAndServe(addr, e))
+	s := &http.Server{Addr: addr}
+	e.run(s)
 }
 
 // RunTLS runs a server with TLS configuration.
 func (e *Echo) RunTLS(addr, certFile, keyFile string) {
-	log.Fatal(http.ListenAndServeTLS(addr, certFile, keyFile, e))
+	s := &http.Server{Addr: addr}
+	e.run(s, certFile, keyFile)
 }
 
 // RunServer runs a custom server.
-func (e *Echo) RunServer(server *http.Server) {
-	server.Handler = e
-	log.Fatal(server.ListenAndServe())
+func (e *Echo) RunServer(srv *http.Server) {
+	e.run(srv)
 }
 
 // RunTLSServer runs a custom server with TLS configuration.
-func (e *Echo) RunTLSServer(server *http.Server, certFile, keyFile string) {
-	server.Handler = e
-	log.Fatal(server.ListenAndServeTLS(certFile, keyFile))
+func (e *Echo) RunTLSServer(srv *http.Server, certFile, keyFile string) {
+	e.run(srv, certFile, keyFile)
+}
+
+func (e *Echo) run(s *http.Server, f ...string) {
+	s.Handler = e
+	if e.http2 {
+		http2.ConfigureServer(s, &http2.Server{})
+	}
+	if len(f) == 0 {
+		log.Fatal(s.ListenAndServe())
+	} else if len(f) == 2 {
+		log.Fatal(s.ListenAndServeTLS(f[0], f[1]))
+	}
 }
 
 // wraps Middleware
